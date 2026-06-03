@@ -3,7 +3,6 @@ import 'home_page.dart';
 import 'calender_page.dart';
 import 'camera_page.dart';
 import 'setting_page.dart';
-import 'notification_page.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -18,11 +17,9 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
-    const HomePage(),
     const CalendarPage(),
-    const CameraPage(),
+    const HomePage(),
     const SettingPage(),
-    const NotificationPage(),
   ];
 
   @override
@@ -35,7 +32,10 @@ class _MainScreenState extends State<MainScreen> {
         height: 60,
         child: FloatingActionButton(
           onPressed: () {
-            setState(() => _currentIndex = 2);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CameraPage()),
+            );
           },
 
           backgroundColor: const Color(0xFF0F624C),
@@ -57,29 +57,27 @@ class _MainScreenState extends State<MainScreen> {
             IconButton(
               icon: Icon(
                 Icons.calendar_month_outlined,
-                color: _currentIndex == 1 ? themeColor : Colors.grey,
+                color: _currentIndex == 0 ? themeColor : Colors.grey,
               ),
-              onPressed: () => setState(() => _currentIndex = 1),
+              onPressed: () => setState(() => _currentIndex = 0),
             ),
 
             IconButton(
               icon: Icon(
                 Icons.home_outlined,
-                // 選ばれているときはテーマカラー（緑）、そうじゃないときはグレーにする
-                color: _currentIndex == 0 ? themeColor : Colors.grey,
+                color: _currentIndex == 1 ? themeColor : Colors.grey,
               ),
               onPressed: () {
-                // タップされたら現在の番号を「0」に更新して画面を再描画する
-                setState(() => _currentIndex = 0);
+                setState(() => _currentIndex = 1);
               },
             ),
 
             IconButton(
               icon: Icon(
                 Icons.settings_outlined,
-                color: _currentIndex == 3 ? themeColor : Colors.grey,
+                color: _currentIndex == 2 ? themeColor : Colors.grey,
               ),
-              onPressed: () => setState(() => _currentIndex = 3),
+              onPressed: () => setState(() => _currentIndex = 2),
             ),
           ],
         ),
