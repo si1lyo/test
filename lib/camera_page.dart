@@ -69,7 +69,6 @@ class _CameraPageState extends State<CameraPage> {
               children: [
                 const Spacer(),
 
-             
                 const SizedBox(height: 24),
 
                 // シャッターボタン

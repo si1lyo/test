@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'calender_page.dart';
 import 'camera_page.dart';
-import 'setting_page.dart';
+import 'setting_page/setting_page.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
