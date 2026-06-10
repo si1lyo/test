@@ -1,11 +1,11 @@
 // android/build.gradle.kts の1行目
 
-// 「4.4.1」ではなく、エラーメッセージに出ている「4.3.15」に書き換える
+
 plugins {
     id("com.google.gms.google-services") version "4.3.15" apply false
 }
 
-// ...以下はそのまま
+
 
 allprojects {
     repositories {
