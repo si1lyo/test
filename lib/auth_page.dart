@@ -189,16 +189,6 @@ class _LoginView extends StatelessWidget {
 
     return Stack(
       children: [
-        // 左上 6-sided cookie（mint）
-        ClipPath(
-          clipper: _CookieClipper(
-            points: 6,
-            size: size.width * 1.0,
-            offset: Offset(-size.width * 0.35, -size.height * 0.15),
-          ),
-          child: const ColoredBox(color: _kLightGreen, child: SizedBox.expand()),
-        ),
-
         // ベースUI
         _LoginContent(
           buttonColor: _kDarkGreen,
@@ -485,15 +475,6 @@ class _RegisterView extends StatelessWidget {
 
     return Stack(
       children: [
-        // クッキー背景
-        ClipPath(
-          clipper: _CookieClipper(
-            points: 6,
-            size: size.width * 1.0,
-            offset: Offset(-size.width * 0.35, -size.height * 0.15),
-          ),
-          child: const ColoredBox(color: _kLightGreen, child: SizedBox.expand()),
-        ),
         ClipPath(
           clipper: _CookieClipper(
             points: 9,

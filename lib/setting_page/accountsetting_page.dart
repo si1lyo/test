@@ -1,7 +1,15 @@
+import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:math';
+import '../app_theme.dart';
+import 'setting_widgets.dart';
+
+String _hashPassword(String password) {
+  return sha256.convert(utf8.encode(password)).toString();
+}
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -15,140 +23,156 @@ class _AccountPageState extends State<AccountPage> {
 
   String _generateGroupId() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    return List.generate(5, (index) => chars[Random().nextInt(chars.length)]).join();
+    return List.generate(5,
+        (_) => chars[Random().nextInt(chars.length)]).join();
   }
 
   void _createGroup() {
-    final nameController = TextEditingController();
-    final passController = TextEditingController();
-
+    final nameCtrl = TextEditingController();
+    final passCtrl = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('グループを新規作成'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: "グループ名（例：田中家）")),
-            TextField(controller: passController, decoration: const InputDecoration(labelText: "参加用パスワード")),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
-          ElevatedButton(
-            onPressed: () async {
-              final newId = _generateGroupId();
-              await _db.collection('groups').doc(newId).set({
-                'groupName': nameController.text,
-                'password': passController.text,
-                'ownerId': user?.uid,
-                'members': [user?.uid],
-              });
-              await _db.collection('users').doc(user?.uid).set({'groupId': newId}, SetOptions(merge: true));
-              if (mounted) Navigator.pop(context);
-            },
-            child: const Text('作成'),
-          ),
+      builder: (_) => ThemedDialog(
+        title: 'グループを新規作成',
+        fields: [
+          TextField(
+              controller: nameCtrl,
+              maxLength: 30,
+              decoration:
+                  const InputDecoration(labelText: 'グループ名（例：田中家）')),
+          TextField(
+              controller: passCtrl,
+              obscureText: true,
+              maxLength: 50,
+              decoration: const InputDecoration(labelText: '参加用パスワード')),
         ],
+        confirmLabel: '作成',
+        onConfirm: () async {
+          if (nameCtrl.text.trim().isEmpty || passCtrl.text.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('グループ名とパスワードを入力してください')));
+            return;
+          }
+          final nav = Navigator.of(context);
+          final newId = _generateGroupId();
+          await _db.collection('groups').doc(newId).set({
+            'groupName': nameCtrl.text.trim(),
+            'passwordHash': _hashPassword(passCtrl.text),
+            'ownerId': user?.uid,
+            'members': [user?.uid],
+          });
+          await _db
+              .collection('users')
+              .doc(user?.uid)
+              .set({'groupId': newId}, SetOptions(merge: true));
+          if (mounted) nav.pop();
+        },
       ),
     );
   }
 
   void _joinGroup() {
-    final idController = TextEditingController();
-    final passController = TextEditingController();
-
+    final idCtrl = TextEditingController();
+    final passCtrl = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('グループに参加'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: idController, decoration: const InputDecoration(labelText: "グループIDを入力")),
-            TextField(controller: passController, decoration: const InputDecoration(labelText: "パスワードを入力")),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル')),
-          ElevatedButton(
-            onPressed: () async {
-              final inputId = idController.text.toUpperCase();
-              final doc = await _db.collection('groups').doc(inputId).get();
-              if (doc.exists && doc.data()?['password'] == passController.text) {
-                await _db.collection('groups').doc(inputId).update({
-                  'members': FieldValue.arrayUnion([user?.uid])
-                });
-                await _db.collection('users').doc(user?.uid).set({'groupId': inputId}, SetOptions(merge: true));
-                if (mounted) Navigator.pop(context);
-              } else {
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('IDまたはパスワードが違います')));
-              }
-            },
-            child: const Text('参加'),
-          ),
+      builder: (_) => ThemedDialog(
+        title: 'グループに参加',
+        fields: [
+          TextField(
+              controller: idCtrl,
+              maxLength: 5,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(labelText: 'グループIDを入力')),
+          TextField(
+              controller: passCtrl,
+              obscureText: true,
+              maxLength: 50,
+              decoration: const InputDecoration(labelText: 'パスワードを入力')),
         ],
+        confirmLabel: '参加',
+        onConfirm: () async {
+          final groupId = idCtrl.text.trim().toUpperCase();
+          final nav = Navigator.of(context);
+          final messenger = ScaffoldMessenger.of(context);
+          final doc = await _db.collection('groups').doc(groupId).get();
+          final stored = doc.data()?['passwordHash'] as String?;
+          if (doc.exists && stored == _hashPassword(passCtrl.text)) {
+            await _db.collection('groups').doc(groupId).update({
+              'members': FieldValue.arrayUnion([user?.uid]),
+            });
+            await _db
+                .collection('users')
+                .doc(user?.uid)
+                .set({'groupId': groupId}, SetOptions(merge: true));
+            if (mounted) nav.pop();
+          } else {
+            messenger.showSnackBar(
+                const SnackBar(content: Text('IDまたはパスワードが違います')));
+          }
+        },
       ),
     );
   }
 
-  // --- 【修正・追加】グループ脱退・削除の統合処理 ---
   Future<void> _handleExitOrDeleteGroup(String groupId) async {
     if (user == null) return;
 
-    // 1. 現在のグループ情報を取得
     final groupDoc = await _db.collection('groups').doc(groupId).get();
     if (!groupDoc.exists) return;
 
     final List<dynamic> members = groupDoc.data()?['members'] ?? [];
 
     if (members.length > 1) {
-      // 【ケース1】他にメンバーがいる場合 → 自分のUIDを抜くだけ
       await _db.collection('groups').doc(groupId).update({
         'members': FieldValue.arrayRemove([user!.uid])
       });
-      // 自分のユーザー情報のgroupIdも消す
-      await _db.collection('users').doc(user!.uid).update({'groupId': FieldValue.delete()});
-      
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('グループを脱退しました')));
+      await _db
+          .collection('users')
+          .doc(user!.uid)
+          .update({'groupId': FieldValue.delete()});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('グループを脱退しました')));
+      }
     } else {
-      // 【ケース2】自分が最後の1人の場合 → 確認ダイアログを出して完全削除
-      bool? confirmDelete = await showDialog<bool>(
+      final confirmDelete = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (_) => AlertDialog(
           title: const Text('グループの削除'),
-          content: const Text('あなたが最後のメンバーです。グループを削除すると、登録された商品データもすべて消去されます。よろしいですか？'),
+          content: const Text(
+              'あなたが最後のメンバーです。グループを削除すると、登録された商品データもすべて消去されます。よろしいですか？'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('キャンセル')),
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('キャンセル')),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('削除する', style: TextStyle(color: Colors.red)),
+              child: const Text('削除する',
+                  style: TextStyle(color: Colors.red)),
             ),
           ],
         ),
       );
 
       if (confirmDelete == true) {
-        // --- データの全削除（一括処理） ---
-        WriteBatch batch = _db.batch();
-        
-        // ① group_products コレクションの中身をすべて取得してバッチに追加
-        final productsRef = _db.collection('groups').doc(groupId).collection('group_products');
-        final productsSnapshot = await productsRef.get();
-        for (var product in productsSnapshot.docs) {
-          batch.delete(product.reference);
+        final batch = _db.batch();
+        final productsSnap = await _db
+            .collection('groups')
+            .doc(groupId)
+            .collection('group_products')
+            .get();
+        for (final doc in productsSnap.docs) {
+          batch.delete(doc.reference);
         }
-        
-        // ② グループ本体を削除
         batch.delete(_db.collection('groups').doc(groupId));
-        
-        // ③ 自分のユーザー情報のgroupIdを削除
-        batch.update(_db.collection('users').doc(user!.uid), {'groupId': FieldValue.delete()});
-
-        // 実行
+        batch.update(_db.collection('users').doc(user!.uid),
+            {'groupId': FieldValue.delete()});
         await batch.commit();
-
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('グループとすべてのデータを削除しました')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('グループとすべてのデータを削除しました')));
+        }
       }
     }
   }
@@ -156,43 +180,57 @@ class _AccountPageState extends State<AccountPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: kBg,
       appBar: AppBar(
-        title: const Text('アカウント・グループ管理'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: kDarkGreen,
+        foregroundColor: Colors.white,
+        title: const Text('アカウント・グループ管理',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
+        elevation: 0,
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: _db.collection('users').doc(user?.uid).snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          
-          final userData = snapshot.data?.data() as Map<String, dynamic>?;
-          final String? groupId = userData?['groupId'];
+          final data = snapshot.data?.data() as Map<String, dynamic>?;
+          final String? groupId = data?['groupId'];
 
           return ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
             children: [
-              const _SectionHeader(title: 'ユーザー情報'),
-              ListTile(leading: const Icon(Icons.person), title: Text(user?.displayName ?? '未設定')),
-              
-              const Divider(),
-              const _SectionHeader(title: 'グループ設定'),
+              const SettingSectionHeader(title: 'ユーザー情報'),
+              ThemedInfoTile(
+                icon: Icons.person,
+                text: user?.displayName ?? user?.email ?? '未設定',
+              ),
+              const SizedBox(height: 8),
+              const SettingSectionHeader(title: 'グループ設定'),
               if (groupId == null) ...[
-                ListTile(leading: const Icon(Icons.group_add), title: const Text('グループを作成する'), onTap: _createGroup),
-                ListTile(leading: const Icon(Icons.login), title: const Text('グループに参加する'), onTap: _joinGroup),
+                ThemedNavTile(
+                    icon: Icons.group_add,
+                    title: 'グループを作成する',
+                    onTap: _createGroup),
+                ThemedNavTile(
+                    icon: Icons.login,
+                    title: 'グループに参加する',
+                    onTap: _joinGroup),
               ] else ...[
                 FutureBuilder<DocumentSnapshot>(
                   future: _db.collection('groups').doc(groupId).get(),
                   builder: (context, gSnap) {
-                    final gData = gSnap.data?.data() as Map<String, dynamic>?;
+                    final gData =
+                        gSnap.data?.data() as Map<String, dynamic>?;
                     return Column(
                       children: [
-                        ListTile(
-                          leading: const Icon(Icons.verified_user),
-                          title: Text('所属：${gData?['groupName'] ?? "読込中..."}'),
-                          subtitle: Text('グループID: $groupId (招待時に共有)'),
+                        ThemedInfoTile(
+                          icon: Icons.verified_user,
+                          text:
+                              '所属：${gData?['groupName'] ?? "読込中..."}  (ID: $groupId)',
                         ),
-                        ListTile(
-                          leading: const Icon(Icons.exit_to_app, color: Colors.red),
-                          title: const Text('グループを脱退/削除'),
+                        ThemedNavTile(
+                          icon: Icons.exit_to_app,
+                          iconColor: Colors.red,
+                          title: 'グループを脱退/削除',
                           onTap: () => _handleExitOrDeleteGroup(groupId),
                         ),
                       ],
@@ -200,13 +238,16 @@ class _AccountPageState extends State<AccountPage> {
                   },
                 ),
               ],
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.logout, color: Colors.orange),
-                title: const Text('ログアウト'),
+              const SizedBox(height: 8),
+              const SettingSectionHeader(title: 'アカウント'),
+              ThemedNavTile(
+                icon: Icons.logout,
+                iconColor: Colors.orange,
+                title: 'ログアウト',
                 onTap: () async {
+                  final nav = Navigator.of(context);
                   await FirebaseAuth.instance.signOut();
-                  if (mounted) Navigator.of(context).pop();
+                  if (mounted) nav.pop();
                 },
               ),
             ],
@@ -214,14 +255,5 @@ class _AccountPageState extends State<AccountPage> {
         },
       ),
     );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  const _SectionHeader({required this.title});
-  @override
-  Widget build(BuildContext context) {
-    return Padding(padding: const EdgeInsets.all(16), child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)));
   }
 }

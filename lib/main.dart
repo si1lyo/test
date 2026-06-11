@@ -35,13 +35,14 @@ class MyApp extends StatelessWidget {
       light: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
-        colorSchemeSeed: const Color(0xFF0F624C),
+        colorSchemeSeed: const Color(0xFF428475),
+        fontFamily: 'NotoSansJP',
       ),
-      // ダークモードの設定
       dark: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        colorSchemeSeed: const Color(0xFF0F624C),
+        colorSchemeSeed: const Color(0xFF428475),
+        fontFamily: 'NotoSansJP',
       ),
       initial: savedThemeMode ?? AdaptiveThemeMode.light,
       

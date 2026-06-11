@@ -1,56 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
+import 'app_theme.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final String searchQuery;
+  const HomePage({super.key, this.searchQuery = ''});
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
-  // 1. 左右スワイプ（マイリスト vs グループ）用
   late TabController _mainTabController;
-  
-  // 2. カテゴリ選択（すべて、食品など）用
   int _selectedCategoryIndex = 0;
-  final List<String> _categories = ['すべて', '食品', '日用品', 'その他'];
-
-  final Color personalColor = const Color(0xFF0F624C);
-  final Color groupColor = Colors.orange;
-  
   String? _groupName;
   String? _groupId;
-  final user = FirebaseAuth.instance.currentUser;
+
+  static const _categories = ['すべて', '食品', '日用品', 'その他'];
+
+  Color get activeColor => kDarkGreen;
 
   @override
   void initState() {
     super.initState();
-    // lengthを2にして、左右スワイプで「個人」と「グループ」を行き来させる
     _mainTabController = TabController(length: 2, vsync: this);
-    
-    // スワイプ中に色が滑らかに変わるようにリスナーを設定
     _mainTabController.addListener(() {
-      setState(() {}); 
+      if (!_mainTabController.indexIsChanging) setState(() {});
     });
-
     _fetchGroupInfo();
   }
 
   Future<void> _fetchGroupInfo() async {
-    if (user != null) {
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
-      final gid = userDoc.data()?['groupId'];
-      if (gid != null) {
-        final groupDoc = await FirebaseFirestore.instance.collection('groups').doc(gid).get();
-        if (mounted) {
-          setState(() {
-            _groupId = gid;
-            _groupName = groupDoc.data()?['groupName'];
-          });
-        }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users').doc(user.uid).get();
+    final gid = userDoc.data()?['groupId'] as String?;
+    if (gid != null && gid.isNotEmpty) {
+      final groupDoc = await FirebaseFirestore.instance
+          .collection('groups').doc(gid).get();
+      if (mounted) {
+        setState(() {
+          _groupId = gid;
+          _groupName = groupDoc.data()?['groupName'] as String?;
+        });
       }
     }
   }
@@ -61,43 +55,66 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // 現在のタブ位置に応じて色を計算（スワイプ中も考慮）
-  Color get activeColor => _mainTabController.index == 1 ? groupColor : personalColor;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        title: _buildTitleToggle(), // 上部のスイッチ（タップでanimateToを呼ぶ）
+        scrolledUnderElevation: 0,
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 8),
+          child: Icon(Icons.menu, color: kDarkGreen),
+        ),
+        title: _buildTitleToggle(),
         centerTitle: true,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: CircleAvatar(
+              radius: 18,
+              backgroundColor: kDarkGreen,
+              child: const Icon(Icons.person, color: Colors.white, size: 20),
+            ),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
-          child: _buildCategoryBar(), // カテゴリバー（タップで絞り込み）
+          child: _buildCategoryBar(),
         ),
       ),
-      // ★ ここが左右スワイプの本体です
       body: TabBarView(
         controller: _mainTabController,
-        physics: const BouncingScrollPhysics(), // スワイプ感を良くする設定
+        physics: const BouncingScrollPhysics(),
         children: [
-          _buildFirestoreList(isGroup: false), // 左：マイリスト
-          _groupId != null 
-            ? _buildFirestoreList(isGroup: true) // 右：グループ
-            : const Center(child: Text('グループに所属していません')),
+          _MyList(
+            searchQuery: widget.searchQuery,
+            selectedCategory: _categories[_selectedCategoryIndex],
+            activeColor: activeColor,
+          ),
+          _groupId != null
+              ? _GroupList(
+                  groupId: _groupId!,
+                  searchQuery: widget.searchQuery,
+                  activeColor: activeColor,
+                )
+              : const Center(
+                  child: Text('グループに所属していません',
+                      style: TextStyle(color: Colors.grey))),
         ],
       ),
     );
   }
 
-  // --- 画面上部のトグル（タップするとスワイプと同じ動きをする） ---
   Widget _buildTitleToggle() {
-    bool isGroup = _mainTabController.index == 1;
+    final isGroup = _mainTabController.index == 1;
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -112,41 +129,48 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Widget _toggleItem(String text, bool isSelected, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         decoration: BoxDecoration(
           color: isSelected ? activeColor : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.grey[600])),
+        child: Text(text,
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.white : Colors.grey[600])),
       ),
     );
   }
 
-  // --- カテゴリ選択バー（タップで表示を切り替えるフィルター） ---
   Widget _buildCategoryBar() {
     return Container(
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.black12, width: 0.5))),
+      color: Colors.transparent,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: List.generate(_categories.length, (index) {
-          bool isSelected = _selectedCategoryIndex == index;
+          final isSelected = _selectedCategoryIndex == index;
           return InkWell(
-            onTap: () => setState(() => _selectedCategoryIndex = index), // ここでカテゴリを変更
+            onTap: () => setState(() => _selectedCategoryIndex = index),
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
               decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(
-                  color: isSelected ? activeColor : Colors.transparent, 
-                  width: 3
-                )),
+                border: Border(
+                  bottom: BorderSide(
+                    color: isSelected ? activeColor : Colors.transparent,
+                    width: 2.5,
+                  ),
+                ),
               ),
               child: Text(
-                _categories[index], 
+                _categories[index],
                 style: TextStyle(
-                  color: isSelected ? activeColor : Colors.grey, 
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
-                )
+                  color: isSelected ? activeColor : Colors.grey[600],
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 14,
+                ),
               ),
             ),
           );
@@ -154,60 +178,202 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ),
     );
   }
+}
 
-  // --- Firestoreからデータを取得してカテゴリ別に表示 ---
-  Widget _buildFirestoreList({required bool isGroup}) {
-    if (user == null) return const Center(child: Text('ログインしてください'));
+// ── マイリスト ──────────────────────────────────────────────────
+class _MyList extends StatelessWidget {
+  final String searchQuery;
+  final String selectedCategory;
+  final Color activeColor;
 
-    Query query;
-    if (isGroup) {
-      query = FirebaseFirestore.instance.collection('groups').doc(_groupId).collection('group_products');
-    } else {
-      query = FirebaseFirestore.instance.collection('users').doc(user!.uid).collection('my_products');
-    }
+  const _MyList({
+    required this.searchQuery,
+    required this.selectedCategory,
+    required this.activeColor,
+  });
 
-    // ★ カテゴリフィルター：選ばれたジャンルで絞り込む
-    if (_selectedCategoryIndex != 0) {
-      query = query.where('genre', isEqualTo: _categories[_selectedCategoryIndex]);
-    }
-
-    query = query.orderBy('purchaseDate', descending: true);
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const SizedBox.shrink();
 
     return StreamBuilder<QuerySnapshot>(
-      stream: query.snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('my_products')
+          .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('エラー: ${snapshot.error}'));
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+              child: CircularProgressIndicator(color: kDarkGreen));
+        }
 
-        final docs = snapshot.data?.docs ?? [];
-        if (docs.isEmpty) return Center(child: Text('${_categories[_selectedCategoryIndex]} の商品はありません'));
+        var docs = snapshot.data?.docs ?? [];
+
+        if (searchQuery.isNotEmpty) {
+          docs = docs.where((doc) {
+            final name =
+                ((doc.data() as Map)['name'] ?? '').toString().toLowerCase();
+            return name.contains(searchQuery.toLowerCase());
+          }).toList();
+        }
+
+        if (selectedCategory != 'すべて') {
+          docs = docs.where((doc) {
+            return (doc.data() as Map)['genre'] == selectedCategory;
+          }).toList();
+        }
+
+        if (docs.isEmpty) {
+          return Center(
+            child: Text(
+              searchQuery.isNotEmpty
+                  ? '「$searchQuery」は見つかりません'
+                  : '商品がありません',
+              style: const TextStyle(color: Colors.grey),
+            ),
+          );
+        }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
           itemCount: docs.length,
-          itemBuilder: (context, index) {
-            final data = docs[index].data() as Map<String, dynamic>;
-            final String name = data['name'] ?? '未設定';
-            final Timestamp? ts = data['purchaseDate'];
-            final String dateStr = ts != null ? DateFormat('MM/dd').format(ts.toDate()) : '--/--';
-            final String genre = data['genre'] ?? 'その他'; // ジャンルの確認用
-
-            return Card(
-              color: Colors.white,
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: Colors.black12, width: 0.5),
-              ),
-              child: ListTile(
-                title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('購入日: $dateStr  カテゴリ: $genre'),
-                trailing: Icon(Icons.chevron_right, color: activeColor),
-              ),
+          itemBuilder: (_, i) {
+            final data = docs[i].data() as Map<String, dynamic>;
+            return _ProductCard(
+              name: data['name'] ?? '',
+              genre: data['genre'] ?? '',
+              activeColor: activeColor,
             );
           },
         );
       },
+    );
+  }
+}
+
+// ── グループリスト ────────────────────────────────────────────
+class _GroupList extends StatelessWidget {
+  final String groupId;
+  final String searchQuery;
+  final Color activeColor;
+
+  const _GroupList({
+    required this.groupId,
+    required this.searchQuery,
+    required this.activeColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('groups')
+          .doc(groupId)
+          .collection('group_products')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+              child: CircularProgressIndicator(color: kDarkGreen));
+        }
+
+        var docs = snapshot.data?.docs ?? [];
+
+        if (searchQuery.isNotEmpty) {
+          docs = docs.where((doc) {
+            final name =
+                ((doc.data() as Map)['name'] ?? '').toString().toLowerCase();
+            return name.contains(searchQuery.toLowerCase());
+          }).toList();
+        }
+
+        if (docs.isEmpty) {
+          return Center(
+            child: Text(
+              searchQuery.isNotEmpty
+                  ? '「$searchQuery」は見つかりません'
+                  : 'グループに商品がありません',
+              style: const TextStyle(color: Colors.grey),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+          itemCount: docs.length,
+          itemBuilder: (_, i) {
+            final data = docs[i].data() as Map<String, dynamic>;
+            return _ProductCard(
+              name: data['name'] ?? '',
+              genre: data['genre'] ?? '',
+              activeColor: activeColor,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// ── 商品カード ────────────────────────────────────────────────
+class _ProductCard extends StatelessWidget {
+  final String name;
+  final String genre;
+  final Color activeColor;
+
+  const _ProductCard({
+    required this.name,
+    required this.genre,
+    required this.activeColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: activeColor.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child:
+                Icon(Icons.inventory_2_outlined, color: activeColor, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600)),
+                if (genre.isNotEmpty)
+                  Text(genre,
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey[500])),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
