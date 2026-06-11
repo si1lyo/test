@@ -1,33 +1,7 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:flutter_application_1/product_kari.dart';
-
-class Event {
-  final String title;
-  final DateTime date;
-
-  Event({
-    required this.title,
-    required this.date,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'title': title,
-      'date': date.toIso8601String(),
-    };
-  }
-
-  factory Event.fromJson(Map<String, dynamic> json) {
-    return Event(
-      title: json['title'],
-      date: DateTime.parse(json['date']),
-    );
-  }
-}
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({super.key});
@@ -39,297 +13,126 @@ class CalendarPage extends StatefulWidget {
 class _CalendarPageState extends State<CalendarPage> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
-
   List<Event> _events = [];
 
   @override
   void initState() {
     super.initState();
-    _events = productData.map((item) {
-      return Event(
-        title: item['name'],
-        date: DateTime.now().add(
-          Duration(
-            days: item['daysLeft'],
-          ),
-        ),
-      );
-    }).toList();
+    _listenToFirestore();
   }
 
-  Future<void> loadEvents() async {
-    final prefs = await SharedPreferences.getInstance();
+  // Firestoreをリアルタイムで監視してイベントに変換
+  void _listenToFirestore() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-    final jsonList = prefs.getStringList('events') ?? [];
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('my_products')
+        .orderBy('purchaseDate', descending: false)
+        .snapshots()
+        .listen((snapshot) {
+      setState(() {
+        _events = snapshot.docs.map((doc) {
+          final data = doc.data();
+          final Timestamp? timestamp = data['purchaseDate'];
 
-    setState(() {
-      _events = jsonList
-          .map(
-            (e) => Event.fromJson(
-              jsonDecode(e),
-            ),
-          )
-          .toList();
+          // purchaseDate + 7日 を賞味期限とする
+          final DateTime baseDate = timestamp != null
+              ? timestamp.toDate()
+              : DateTime.now();
+          final DateTime expiryDate = baseDate.add(const Duration(days: 7));
+
+          return Event(
+            title: data['name'] ?? '商品名なし',
+            date: expiryDate,
+          );
+        }).toList();
+      });
     });
   }
 
-  Future<void> saveEvents() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final jsonList = _events
-        .map(
-          (e) => jsonEncode(
-            e.toJson(),
-          ),
-        )
-        .toList();
-
-    await prefs.setStringList(
-      'events',
-      jsonList,
-    );
-  }
-
   List<Event> getEvents(DateTime day) {
-    return _events.where((event) {
-      return isSameDay(
-        event.date,
-        day,
-      );
-    }).toList();
+    return _events.where((event) => isSameDay(event.date, day)).toList();
   }
 
   List<Event> getUpcomingEvents() {
     final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
 
-    final upcoming = _events.where((event) {
-      return !event.date.isBefore(
-        DateTime(
-          today.year,
-          today.month,
-          today.day,
-        ),
-      );
-    }).toList();
-
-    upcoming.sort(
-      (a, b) => a.date.compareTo(b.date),
-    );
+    final upcoming = _events
+        .where((event) => !event.date.isBefore(todayOnly))
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
 
     return upcoming.take(3).toList();
   }
 
   int daysLeft(DateTime targetDate) {
     final today = DateTime.now();
-
-    final todayOnly = DateTime(
-      today.year,
-      today.month,
-      today.day,
-    );
-
-    final targetOnly = DateTime(
-      targetDate.year,
-      targetDate.month,
-      targetDate.day,
-    );
-
-    return targetOnly
-        .difference(todayOnly)
-        .inDays;
-  }
-
-  Future<void> addEvent() async {
-    if (_selectedDay == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            '先に日付を選択してください',
-          ),
-        ),
-      );
-      return;
-    }
-
-    final controller =
-        TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('予定追加'),
-          content: TextField(
-            controller: controller,
-            decoration:
-                const InputDecoration(
-              hintText: '予定名',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text(
-                'キャンセル',
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (controller.text
-                    .trim()
-                    .isEmpty) {
-                  return;
-                }
-
-                setState(() {
-                  _events.add(
-                    Event(
-                      title: controller.text
-                          .trim(),
-                      date: _selectedDay!,
-                    ),
-                  );
-                });
-
-                await saveEvents();
-
-                if (context.mounted) {
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text(
-                '保存',
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> deleteEvent(
-    Event event,
-  ) async {
-    setState(() {
-      _events.remove(event);
-    });
-
-    await saveEvents();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    final targetOnly = DateTime(targetDate.year, targetDate.month, targetDate.day);
+    return targetOnly.difference(todayOnly).inDays;
   }
 
   @override
   Widget build(BuildContext context) {
-    final upcomingEvents =
-        getUpcomingEvents();
+    final upcomingEvents = getUpcomingEvents();
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('カレンダー'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: Padding(
-        padding:
-            const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             TableCalendar(
-              firstDay:
-                  DateTime.utc(
-                2020,
-                1,
-                1,
-              ),
-              lastDay:
-                  DateTime.utc(
-                2035,
-                12,
-                31,
-              ),
-              focusedDay:
-                  _focusedDay,
-
-              selectedDayPredicate:
-                  (day) {
-                return isSameDay(
-                  _selectedDay,
-                  day,
-                );
-              },
-
-              onDaySelected:
-                  (
-                    selectedDay,
-                    focusedDay,
-                  ) {
+              firstDay: DateTime.utc(2020, 1, 1),
+              lastDay: DateTime.utc(2035, 12, 31),
+              focusedDay: _focusedDay,
+              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+              onDaySelected: (selectedDay, focusedDay) {
                 setState(() {
-                  _selectedDay =
-                      selectedDay;
-                  _focusedDay =
-                      focusedDay;
+                  _selectedDay = selectedDay;
+                  _focusedDay = focusedDay;
                 });
               },
-
-              headerStyle:
-                  const HeaderStyle(
-                titleCentered:
-                    true,
-                formatButtonVisible:
-                    false,
+              headerStyle: const HeaderStyle(
+                titleCentered: true,
+                formatButtonVisible: false,
               ),
-
-              calendarStyle:
-                  const CalendarStyle(
-                todayDecoration:
-                    BoxDecoration(
-                  color:
-                      Colors.orange,
-                  shape:
-                      BoxShape.circle,
+              calendarStyle: const CalendarStyle(
+                todayDecoration: BoxDecoration(
+                  color: Colors.orange,
+                  shape: BoxShape.circle,
                 ),
-                selectedDecoration:
-                    BoxDecoration(
-                  color:
-                      Colors.blue,
-                  shape:
-                      BoxShape.circle,
+                selectedDecoration: BoxDecoration(
+                  color: Colors.blue,
+                  shape: BoxShape.circle,
                 ),
               ),
+              calendarBuilders: CalendarBuilders(
+                defaultBuilder: (context, day, focusedDay) {
+                  final events = getEvents(day);
+                  if (events.isEmpty) return null;
 
-              calendarBuilders:
-                  CalendarBuilders(
-                defaultBuilder: (
-                  context,
-                  day,
-                  focusedDay,
-                ) {
-                  final hasEvent =
-                      getEvents(day)
-                          .isNotEmpty;
-
-                  if (!hasEvent) {
-                    return null;
-                  }
+                  // 期限切れ間近（3日以内）は赤、それ以外は緑
+                  final daysRemaining = daysLeft(day);
+                  final color = daysRemaining <= 3 ? Colors.red : Colors.green;
 
                   return Container(
-                    margin:
-                        const EdgeInsets
-                            .all(6),
-                    decoration:
-                        const BoxDecoration(
-                      color:
-                          Colors.green,
-                      shape:
-                          BoxShape.circle,
+                    margin: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
                     ),
                     child: Center(
                       child: Text(
                         '${day.day}',
-                        style:
-                            const TextStyle(
-                          color: Colors
-                              .white,
-                        ),
+                        style: const TextStyle(color: Colors.white),
                       ),
                     ),
                   );
@@ -337,82 +140,67 @@ class _CalendarPageState extends State<CalendarPage> {
               ),
             ),
 
-            const SizedBox(
-              height: 20,
-            ),
+            const SizedBox(height: 20),
 
             const Align(
-              alignment:
-                  Alignment.centerLeft,
+              alignment: Alignment.centerLeft,
               child: Text(
-                '直近の予定',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight:
-                      FontWeight.bold,
-                ),
+                '直近の賞味期限',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
             ),
 
-            const SizedBox(
-              height: 10,
-            ),
+            const SizedBox(height: 10),
 
             Expanded(
-              child:
-                  upcomingEvents
-                          .isEmpty
-                      ? const Center(
-                          child: Text(
-                            '予定はありません',
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount:
-                              upcomingEvents
-                                  .length,
-                          itemBuilder:
-                              (
-                                context,
-                                index,
-                              ) {
-                            final event =
-                                upcomingEvents[
-                                    index];
+              child: upcomingEvents.isEmpty
+                  ? const Center(child: Text('登録された商品はまだありません'))
+                  : ListView.builder(
+                      itemCount: upcomingEvents.length,
+                      itemBuilder: (context, index) {
+                        final event = upcomingEvents[index];
+                        final remaining = daysLeft(event.date);
 
-                            return Card(
-                              child:
-                                  ListTile(
-                                title: Text(
-                                  event.title,
-                                ),
-                                subtitle:
-                                    Text(
-                                  '${event.date.year}/${event.date.month}/${event.date.day}',
-                                ),
-                                trailing:
-                                    Text(
-                                  'あと${daysLeft(event.date)}日',
-                                  style:
-                                      const TextStyle(
-                                    fontWeight:
-                                        FontWeight.bold,
-                                  ),
-                                ),
-                                onLongPress:
-                                    () {
-                                  deleteEvent(
-                                    event,
-                                  );
-                                },
+                        // 残り日数で色を変える
+                        final color = remaining <= 3
+                            ? Colors.red
+                            : remaining <= 7
+                                ? Colors.orange
+                                : Colors.green;
+
+                        return Card(
+                          child: ListTile(
+                            leading: Icon(Icons.inventory_2, color: color),
+                            title: Text(event.title),
+                            subtitle: Text(
+                              '賞味期限: ${event.date.year}/${event.date.month}/${event.date.day}',
+                            ),
+                            trailing: Text(
+                              remaining == 0
+                                  ? '今日まで'
+                                  : remaining < 0
+                                      ? '期限切れ'
+                                      : 'あと${remaining}日',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: color,
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
       ),
     );
   }
+}
+
+class Event {
+  final String title;
+  final DateTime date;
+
+  Event({required this.title, required this.date});
 }
