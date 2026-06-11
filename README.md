@@ -1,17 +1,17 @@
-# flutter_application_1
+# まだある？
 
-A new Flutter project.
+日常の在庫を管理できるアプリです。
 
-## Getting Started
+## 技術スタック
 
-This project is a starting point for a Flutter application.
+- Dart 3.12.0
+- Flutter 3.34.1
+- Firebase
 
-A few resources to get you started if this is your first Flutter project:
+## 機能
+- ユーザー登録、ログイン、ログアウト
+- 在庫登録、編集、削除
+- 在庫の検索、並べ替え
+- 在庫の通知
+- 在庫のグラフ表示
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.

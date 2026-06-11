@@ -49,16 +49,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
       backgroundColor: _kBg,
       body: Stack(
         children: [
-          // ── 左上 6-sided cookie（mint） ──
-          ClipPath(
-            clipper: _CookieClipper(
-              points: 6,
-              size: size.width * 1.0,
-              offset: Offset(-size.width * 0.35, -size.height * 0.15),
-            ),
-            child: const ColoredBox(color: _kLightGreen, child: SizedBox.expand()),
-          ),
-
           // ── ベースコンテンツ（白地） ──
           _PageContent(
             data: _pages[_page],

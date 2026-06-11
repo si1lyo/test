@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'app_theme.dart';
 
 class CalendarPage extends StatefulWidget {
-  const CalendarPage({super.key});
+  final String searchQuery;
+  const CalendarPage({super.key, this.searchQuery = ''});
 
   @override
   State<CalendarPage> createState() => _CalendarPageState();
@@ -21,11 +23,9 @@ class _CalendarPageState extends State<CalendarPage> {
     _listenToFirestore();
   }
 
-  // Firestoreをリアルタイムで監視してイベントに変換
   void _listenToFirestore() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -33,164 +33,241 @@ class _CalendarPageState extends State<CalendarPage> {
         .orderBy('purchaseDate', descending: false)
         .snapshots()
         .listen((snapshot) {
+      if (!mounted) return;
       setState(() {
         _events = snapshot.docs.map((doc) {
           final data = doc.data();
-          final Timestamp? timestamp = data['purchaseDate'];
-
-          // purchaseDate + 7日 を賞味期限とする
-          final DateTime baseDate = timestamp != null
-              ? timestamp.toDate()
-              : DateTime.now();
-          final DateTime expiryDate = baseDate.add(const Duration(days: 7));
-
+          final Timestamp? ts = data['purchaseDate'];
+          final base = ts?.toDate() ?? DateTime.now();
           return Event(
             title: data['name'] ?? '商品名なし',
-            date: expiryDate,
+            date: base.add(const Duration(days: 7)),
           );
         }).toList();
       });
     });
   }
 
-  List<Event> getEvents(DateTime day) {
-    return _events.where((event) => isSameDay(event.date, day)).toList();
-  }
+  List<Event> _getEventsForDay(DateTime day) =>
+      _events.where((e) => isSameDay(e.date, day)).toList();
 
-  List<Event> getUpcomingEvents() {
-    final today = DateTime.now();
-    final todayOnly = DateTime(today.year, today.month, today.day);
-
-    final upcoming = _events
-        .where((event) => !event.date.isBefore(todayOnly))
+  List<Event> _getUpcoming() {
+    final today = DateTime(
+        DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    var list = _events
+        .where((e) {
+          final d = DateTime(e.date.year, e.date.month, e.date.day);
+          return !d.isBefore(today);
+        })
         .toList()
       ..sort((a, b) => a.date.compareTo(b.date));
-
-    return upcoming.take(3).toList();
+    if (widget.searchQuery.isNotEmpty) {
+      list = list
+          .where((e) => e.title
+              .toLowerCase()
+              .contains(widget.searchQuery.toLowerCase()))
+          .toList();
+    }
+    return list;
   }
 
-  int daysLeft(DateTime targetDate) {
-    final today = DateTime.now();
-    final todayOnly = DateTime(today.year, today.month, today.day);
-    final targetOnly = DateTime(targetDate.year, targetDate.month, targetDate.day);
-    return targetOnly.difference(todayOnly).inDays;
+  int _daysLeft(DateTime d) {
+    final today = DateTime(
+        DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final target = DateTime(d.year, d.month, d.day);
+    return target.difference(today).inDays;
+  }
+
+  Color _urgencyColor(int days) {
+    if (days < 0) return Colors.grey;
+    if (days <= 3) return Colors.red;
+    if (days <= 7) return kMint;
+    return kDarkGreen;
   }
 
   @override
   Widget build(BuildContext context) {
-    final upcomingEvents = getUpcomingEvents();
+    final upcoming = _getUpcoming();
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('カレンダー'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: const Text('カレンダー',
+            style: TextStyle(fontWeight: FontWeight.bold, color: kDarkGreen)),
+        centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+      // SingleChildScrollView で全体を包んでオーバーフロー解消
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TableCalendar(
-              firstDay: DateTime.utc(2020, 1, 1),
-              lastDay: DateTime.utc(2035, 12, 31),
-              focusedDay: _focusedDay,
-              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-              onDaySelected: (selectedDay, focusedDay) {
-                setState(() {
-                  _selectedDay = selectedDay;
-                  _focusedDay = focusedDay;
-                });
-              },
-              headerStyle: const HeaderStyle(
-                titleCentered: true,
-                formatButtonVisible: false,
+            // ── カレンダー ──
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              calendarStyle: const CalendarStyle(
-                todayDecoration: BoxDecoration(
-                  color: Colors.orange,
-                  shape: BoxShape.circle,
-                ),
-                selectedDecoration: BoxDecoration(
-                  color: Colors.blue,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              calendarBuilders: CalendarBuilders(
-                defaultBuilder: (context, day, focusedDay) {
-                  final events = getEvents(day);
-                  if (events.isEmpty) return null;
-
-                  // 期限切れ間近（3日以内）は赤、それ以外は緑
-                  final daysRemaining = daysLeft(day);
-                  final color = daysRemaining <= 3 ? Colors.red : Colors.green;
-
-                  return Container(
-                    margin: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        '${day.day}',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  );
+              child: TableCalendar(
+                firstDay: DateTime.utc(2020, 1, 1),
+                lastDay: DateTime.utc(2035, 12, 31),
+                focusedDay: _focusedDay,
+                // 月表示固定でサイズ変動を防ぐ
+                calendarFormat: CalendarFormat.month,
+                availableCalendarFormats: const {CalendarFormat.month: '月'},
+                selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                onDaySelected: (selectedDay, focusedDay) {
+                  setState(() {
+                    _selectedDay = selectedDay;
+                    _focusedDay = focusedDay;
+                  });
                 },
+                onPageChanged: (focusedDay) {
+                  _focusedDay = focusedDay;
+                },
+                headerStyle: const HeaderStyle(
+                  titleCentered: true,
+                  formatButtonVisible: false,
+                  titleTextStyle: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: kDarkGreen,
+                  ),
+                  leftChevronIcon:
+                      Icon(Icons.chevron_left, color: kDarkGreen),
+                  rightChevronIcon:
+                      Icon(Icons.chevron_right, color: kDarkGreen),
+                ),
+                calendarStyle: CalendarStyle(
+                  todayDecoration: const BoxDecoration(
+                      color: kMint, shape: BoxShape.circle),
+                  selectedDecoration: const BoxDecoration(
+                      color: kDarkGreen, shape: BoxShape.circle),
+                  todayTextStyle: const TextStyle(color: Colors.white),
+                  selectedTextStyle: const TextStyle(color: Colors.white),
+                  weekendTextStyle: TextStyle(color: Colors.red[300]),
+                  outsideDaysVisible: false,
+                ),
+                calendarBuilders: CalendarBuilders(
+                  defaultBuilder: (context, day, _) {
+                    final events = _getEventsForDay(day);
+                    if (events.isEmpty) return null;
+                    final color = _urgencyColor(_daysLeft(day));
+                    return Container(
+                      margin: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                          color: color, shape: BoxShape.circle),
+                      child: Center(
+                        child: Text('${day.day}',
+                            style:
+                                const TextStyle(color: Colors.white)),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
 
             const SizedBox(height: 20),
 
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '直近の賞味期限',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-            ),
-
-            const SizedBox(height: 10),
-
-            Expanded(
-              child: upcomingEvents.isEmpty
-                  ? const Center(child: Text('登録された商品はまだありません'))
-                  : ListView.builder(
-                      itemCount: upcomingEvents.length,
-                      itemBuilder: (context, index) {
-                        final event = upcomingEvents[index];
-                        final remaining = daysLeft(event.date);
-
-                        // 残り日数で色を変える
-                        final color = remaining <= 3
-                            ? Colors.red
-                            : remaining <= 7
-                                ? Colors.orange
-                                : Colors.green;
-
-                        return Card(
-                          child: ListTile(
-                            leading: Icon(Icons.inventory_2, color: color),
-                            title: Text(event.title),
-                            subtitle: Text(
-                              '賞味期限: ${event.date.year}/${event.date.month}/${event.date.day}',
-                            ),
-                            trailing: Text(
-                              remaining == 0
-                                  ? '今日まで'
-                                  : remaining < 0
-                                      ? '期限切れ'
-                                      : 'あと${remaining}日',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: color,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+            // ── セクションヘッダ ──
+            Row(
+              children: [
+                const Text('直近の賞味期限',
+                    style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: kDarkGreen)),
+                if (widget.searchQuery.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '「${widget.searchQuery}」で絞り込み中',
+                      style: const TextStyle(
+                          fontSize: 12, color: Colors.grey),
+                      overflow: TextOverflow.ellipsis,
                     ),
+                  ),
+                ],
+              ],
             ),
+
+            const SizedBox(height: 12),
+
+            // ── イベントリスト（shrinkWrap でColumn内に展開） ──
+            if (upcoming.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 24),
+                  child: Text(
+                    widget.searchQuery.isNotEmpty
+                        ? '「${widget.searchQuery}」は見つかりません'
+                        : '登録された商品はまだありません',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                ),
+              )
+            else
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: upcoming.length,
+                itemBuilder: (context, index) {
+                  final event = upcoming[index];
+                  final remaining = _daysLeft(event.date);
+                  final color = _urgencyColor(remaining);
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: ListTile(
+                      leading: Icon(Icons.inventory_2, color: color),
+                      title: Text(event.title),
+                      subtitle: Text(
+                        '賞味期限: ${event.date.year}/${event.date.month}/${event.date.day}',
+                      ),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          remaining == 0
+                              ? '今日まで'
+                              : remaining < 0
+                                  ? '期限切れ'
+                                  : 'あと$remaining日',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: color,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
           ],
         ),
       ),
@@ -201,6 +278,5 @@ class _CalendarPageState extends State<CalendarPage> {
 class Event {
   final String title;
   final DateTime date;
-
   Event({required this.title, required this.date});
 }
