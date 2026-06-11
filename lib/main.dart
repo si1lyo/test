@@ -1,29 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:adaptive_theme/adaptive_theme.dart'; // これが必要
+import 'package:adaptive_theme/adaptive_theme.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'main_screen.dart';
-import 'package:firebase_core/firebase_core.dart'; // 1. 追加
-import 'firebase_options.dart'; // 2. 追加（自動生成されたファイル）
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'auth_page.dart';
-import 'package:firebase_auth/firebase_auth.dart'; 
+import 'onboarding_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ★ ここに Firebase の初期化を追加！
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // 前回の保存設定を読み込む（以前からあるコード）
   final savedThemeMode = await AdaptiveTheme.getThemeMode();
-  
-  runApp(MyApp(savedThemeMode: savedThemeMode));
+  final prefs = await SharedPreferences.getInstance();
+  final onboardingDone = prefs.getBool('onboarding_done') ?? false;
+
+  runApp(MyApp(savedThemeMode: savedThemeMode, onboardingDone: onboardingDone));
 }
 
 class MyApp extends StatelessWidget {
   final AdaptiveThemeMode? savedThemeMode;
-  const MyApp({super.key, this.savedThemeMode});
+  final bool onboardingDone;
+  const MyApp({super.key, this.savedThemeMode, required this.onboardingDone});
 
   @override
   Widget build(BuildContext context) {
@@ -49,17 +52,21 @@ class MyApp extends StatelessWidget {
         theme: theme,      // builderから渡されたテーマを適用
         darkTheme: darkTheme, // builderから渡されたダークテーマを適用
         home: StreamBuilder<User?>(
-          stream: FirebaseAuth.instance.authStateChanges(), // ログイン状態を監視
+          stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const Scaffold(
+                backgroundColor: Colors.white,
+                body: Center(child: CircularProgressIndicator()),
+              );
             }
-            // ユーザーデータがあればメイン画面、なければログイン画面を表示
             if (snapshot.hasData) {
               return const MainScreen();
-            } else {
-              return const AuthPage();
             }
+            if (!onboardingDone) {
+              return const OnboardingPage();
+            }
+            return const AuthPage();
           },
         ),
       ),
