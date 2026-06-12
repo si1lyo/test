@@ -43,6 +43,8 @@ class MyApp extends StatelessWidget {
         brightness: Brightness.dark,
         colorSchemeSeed: const Color(0xFF428475),
         fontFamily: 'NotoSansJP',
+        scaffoldBackgroundColor: const Color(0xFF1B1D1C),
+        cardColor: const Color(0xFF262928),
       ),
       initial: savedThemeMode ?? AdaptiveThemeMode.light,
       

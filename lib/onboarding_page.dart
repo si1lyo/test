@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'app_theme.dart';
 import 'auth_page.dart';
 
 const _kDarkGreen = Color(0xFF428475);
 const _kLightGreen = Color(0xFF89D7B7);
-const _kBg = Color(0xFFFFFDFB);
 const _kFont = 'NotoSansJP';
 
 class OnboardingPage extends StatefulWidget {
@@ -46,7 +46,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
     final isLast = _page == _pages.length - 1;
 
     return Scaffold(
-      backgroundColor: _kBg,
+      backgroundColor: AppColors.of(context).bg,
       body: Stack(
         children: [
           // ── ベースコンテンツ（白地） ──

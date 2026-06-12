@@ -6,6 +6,7 @@ import 'home_page.dart';
 import 'calender_page.dart';
 import 'camera_page.dart';
 import 'setting_page/setting_page.dart';
+import 'widgets/icon_picker.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -15,7 +16,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 1;
+  int _currentIndex = 0;
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -37,12 +38,14 @@ class _MainScreenState extends State<MainScreen> {
     final nameController = TextEditingController();
     final typeController = TextEditingController();
     String selectedGenre = '食品';
+    String selectedIcon = '';
     bool saveToGroup = false;
 
+    final colors = AppColors.of(context);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: kBg,
+      backgroundColor: colors.bg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -56,16 +59,54 @@ class _MainScreenState extends State<MainScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('詳細登録',
+              Text('詳細登録',
                   style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: kDarkGreen)),
+                      color: colors.accent)),
               const SizedBox(height: 20),
-              TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                      labelText: '商品名', hintText: '例：明治おいしい牛乳')),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showIconPicker(context,
+                          current: selectedIcon);
+                      if (picked != null) {
+                        setSheetState(() => selectedIcon = picked);
+                      }
+                    },
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: colors.accent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: colors.accent.withValues(alpha: 0.3)),
+                      ),
+                      child: Center(
+                        child: selectedIcon.isNotEmpty
+                            ? Icon(
+                                IconData(int.parse(selectedIcon),
+                                    fontFamily: 'MaterialIcons'),
+                                color: colors.accent,
+                                size: 26,
+                              )
+                            : Icon(Icons.add_photo_alternate_outlined,
+                                color: colors.accent),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                            labelText: '商品名',
+                            hintText: '例：明治おいしい牛乳')),
+                  ),
+                ],
+              ),
               TextField(
                   controller: typeController,
                   decoration:
@@ -95,7 +136,7 @@ class _MainScreenState extends State<MainScreen> {
                 height: 50,
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                      backgroundColor: kDarkGreen,
+                      backgroundColor: colors.accent,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12))),
                   onPressed: () async {
@@ -136,6 +177,7 @@ class _MainScreenState extends State<MainScreen> {
                       'name': nameController.text.trim(),
                       'type': typeController.text.trim(),
                       'genre': selectedGenre,
+                      'icon': selectedIcon,
                       'purchaseDate': Timestamp.now(),
                       'registeredBy': user.displayName ?? user.email,
                     });
@@ -168,18 +210,20 @@ class _MainScreenState extends State<MainScreen> {
       SettingPage(searchQuery: _searchQuery),
     ];
 
+    final colors = AppColors.of(context);
+
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: colors.bg,
       body: Stack(
         children: [
-          // ── 右下 cookie（dark green） ──
+          // ── 右下 cookie ──
           ClipPath(
             clipper: CookieClipper(
               points: 9,
               size: size.width * 1.2,
               offset: Offset(size.width * 0.38, size.height * 0.55),
             ),
-            child: const ColoredBox(color: kDarkGreen, child: SizedBox.expand()),
+            child: ColoredBox(color: colors.cookieBg, child: const SizedBox.expand()),
           ),
 
           // ── ページ + ボトムナビ（縦に確定） ──
@@ -210,7 +254,7 @@ class _MainScreenState extends State<MainScreen> {
                 GestureDetector(
                   onLongPress: _showAddProductSheet,
                   child: Material(
-                    color: kDarkGreen,
+                    color: colors.accent,
                     shape: const CircleBorder(),
                     elevation: 4,
                     child: InkWell(
@@ -247,14 +291,15 @@ class _SearchCapsule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     return Container(
       height: 50,
       decoration: BoxDecoration(
-        color: kBg,
+        color: colors.bg,
         borderRadius: BorderRadius.circular(25),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
+            color: Colors.black.withValues(alpha: 0.18),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -262,17 +307,17 @@ class _SearchCapsule extends StatelessWidget {
       ),
       child: TextField(
         controller: controller,
-        style: const TextStyle(color: kDarkGreen, fontSize: 15),
-        cursorColor: kDarkGreen,
+        style: TextStyle(color: colors.accent, fontSize: 15),
+        cursorColor: colors.accent,
         decoration: InputDecoration(
           hintText: '商品を検索',
-          hintStyle: TextStyle(color: kDarkGreen.withValues(alpha: 0.5), fontSize: 15),
+          hintStyle: TextStyle(color: colors.accent.withValues(alpha: 0.5), fontSize: 15),
           suffixIcon: controller.text.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.close, color: kDarkGreen, size: 20),
+                  icon: Icon(Icons.close, color: colors.accent, size: 20),
                   onPressed: () => controller.clear(),
                 )
-              : const Icon(Icons.search, color: kDarkGreen, size: 22),
+              : Icon(Icons.search, color: colors.accent, size: 22),
           border: InputBorder.none,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
@@ -289,17 +334,18 @@ class _BottomNavBar extends StatelessWidget {
   const _BottomNavBar({required this.currentIndex, required this.onTap});
 
   static const _items = [
-    (icon: Icons.calendar_month_outlined, label: 'カレンダー'),
+    (icon: Icons.analytics_outlined, label: '分析'),
     (icon: Icons.list_alt_outlined, label: 'リスト'),
     (icon: Icons.settings_outlined, label: '設定'),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     return Container(
-      decoration: const BoxDecoration(
-        color: kDarkGreen,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: colors.navBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SafeArea(
         top: false,

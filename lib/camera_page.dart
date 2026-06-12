@@ -33,7 +33,7 @@ class _CameraPageState extends State<CameraPage> {
         orElse: () => cameras.first,
       );
       if (cameras.isNotEmpty) {
-        _controller = CameraController(main, ResolutionPreset.high);
+        _controller = CameraController(main, ResolutionPreset.medium, enableAudio: false);
         await _controller!.initialize();
         if (!mounted) return;
         setState(() => _isCameraInitialized = true);
@@ -62,19 +62,20 @@ class _CameraPageState extends State<CameraPage> {
       if (!mounted) return;
 
       // ローディング表示
+      final accentColor = AppColors.of(context).accent;
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => const Center(
+        builder: (_) => Center(
           child: Card(
             child: Padding(
-              padding: EdgeInsets.all(24),
+              padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(color: kDarkGreen),
-                  SizedBox(height: 16),
-                  Text('レシートを読み取り中…',
+                  CircularProgressIndicator(color: accentColor),
+                  const SizedBox(height: 16),
+                  const Text('レシートを読み取り中…',
                       style: TextStyle(fontFamily: kFont, fontSize: 15)),
                 ],
               ),
@@ -83,12 +84,12 @@ class _CameraPageState extends State<CameraPage> {
         ),
       );
 
-      final items = await ReceiptRecognitionService.recognizeReceipt(imageFile);
+      final result = await ReceiptRecognitionService.recognizeReceipt(imageFile);
 
       if (!mounted) return;
       Navigator.pop(context); // ローディングを閉じる
 
-      if (items.isEmpty) {
+      if (result.items.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('商品を認識できませんでした。もう一度お試しください。')),
         );
@@ -96,7 +97,7 @@ class _CameraPageState extends State<CameraPage> {
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ReceiptConfirmPage(items: items),
+            builder: (_) => ReceiptConfirmPage(result: result),
           ),
         );
       }
@@ -118,9 +119,10 @@ class _CameraPageState extends State<CameraPage> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final colors = AppColors.of(context);
 
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: colors.bg,
       body: Stack(
         children: [
           // ── 右下 9-sided cookie（dark green） ──
@@ -130,7 +132,7 @@ class _CameraPageState extends State<CameraPage> {
               size: size.width * 1.2,
               offset: Offset(size.width * 0.38, size.height * 0.55),
             ),
-            child: const ColoredBox(color: kDarkGreen, child: SizedBox.expand()),
+            child: ColoredBox(color: colors.navBg, child: const SizedBox.expand()),
           ),
 
           // ── コンテンツ ──
@@ -143,16 +145,16 @@ class _CameraPageState extends State<CameraPage> {
                   child: Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_new, color: kDarkGreen),
+                        icon: Icon(Icons.arrow_back_ios_new, color: colors.accent),
                         onPressed: () => Navigator.pop(context),
                       ),
-                      const Text(
+                      Text(
                         'レシートを撮影',
                         style: TextStyle(
                           fontFamily: kFont,
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: kDarkGreen,
+                          color: colors.accent,
                         ),
                       ),
                     ],
@@ -171,9 +173,9 @@ class _CameraPageState extends State<CameraPage> {
                       child: _isCameraInitialized
                           ? CameraPreview(_controller!)
                           : Container(
-                              color: const Color(0xFFD9D9D9),
-                              child: const Center(
-                                child: CircularProgressIndicator(color: kDarkGreen),
+                              color: colors.surface,
+                              child: Center(
+                                child: CircularProgressIndicator(color: colors.accent),
                               ),
                             ),
                     ),
@@ -192,11 +194,11 @@ class _CameraPageState extends State<CameraPage> {
                       height: 72,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white,
-                        border: Border.all(color: kDarkGreen, width: 4),
+                        color: colors.surface,
+                        border: Border.all(color: colors.accent, width: 4),
                         boxShadow: [
                           BoxShadow(
-                            color: kDarkGreen.withValues(alpha: 0.3),
+                            color: colors.accent.withValues(alpha: 0.3),
                             blurRadius: 12,
                             spreadRadius: 2,
                           ),
@@ -206,8 +208,8 @@ class _CameraPageState extends State<CameraPage> {
                       child: Container(
                         decoration: BoxDecoration(
                           color: _isProcessing
-                              ? kDarkGreen.withValues(alpha: 0.4)
-                              : kDarkGreen,
+                              ? colors.accent.withValues(alpha: 0.4)
+                              : colors.accent,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.camera_alt,

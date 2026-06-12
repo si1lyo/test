@@ -11,10 +11,11 @@ class RegisteredProductsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
+    final colors = AppColors.of(context);
     return Scaffold(
-      backgroundColor: kBg,
+      backgroundColor: colors.bg,
       appBar: AppBar(
-        backgroundColor: kDarkGreen,
+        backgroundColor: colors.navBg,
         foregroundColor: Colors.white,
         title: const Text('登録商品一覧',
             style: TextStyle(fontWeight: FontWeight.bold)),
@@ -55,7 +56,7 @@ class RegisteredProductsPage extends StatelessWidget {
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: colors.surface,
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(

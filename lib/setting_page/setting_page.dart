@@ -52,11 +52,13 @@ class SettingPage extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text('設定',
-            style: TextStyle(fontWeight: FontWeight.bold, color: kDarkGreen)),
+        title: Text('設定',
+            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.of(context).accent)),
         centerTitle: true,
       ),
-      body: items.isEmpty
+      body: Builder(builder: (context) {
+        final colors = AppColors.of(context);
+        return items.isEmpty
           ? Center(
               child: Text('「$searchQuery」は見つかりません',
                   style: const TextStyle(color: Colors.grey)))
@@ -68,7 +70,7 @@ class SettingPage extends StatelessWidget {
                 return Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.92),
+                    color: colors.surface,
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
@@ -83,21 +85,22 @@ class SettingPage extends StatelessWidget {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: kDarkGreen.withValues(alpha: 0.1),
+                        color: colors.accent.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(item.icon, color: kDarkGreen, size: 20),
+                      child: Icon(item.icon, color: colors.accent, size: 20),
                     ),
                     title: Text(item.title,
                         style: const TextStyle(
                             fontSize: 15, fontWeight: FontWeight.w500)),
-                    trailing: const Icon(Icons.chevron_right,
-                        color: kDarkGreen, size: 20),
+                    trailing: Icon(Icons.chevron_right,
+                        color: colors.accent, size: 20),
                     onTap: () => _navigate(context, item.title),
                   ),
                 );
               },
-            ),
+            );
+      }),
     );
   }
 }
@@ -111,22 +114,30 @@ class _SettingItem {
 // ── サブページ ────────────────────────────────────────────────
 class ExternalServicePage extends StatelessWidget {
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-            title: const Text('外部サービスの連携'),
-            backgroundColor: kDarkGreen,
-            foregroundColor: Colors.white),
-        body: const Center(child: Text('外部連携のコンテンツ')),
-      );
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Scaffold(
+      backgroundColor: colors.bg,
+      appBar: AppBar(
+          title: const Text('外部サービスの連携'),
+          backgroundColor: colors.navBg,
+          foregroundColor: Colors.white),
+      body: const Center(child: Text('外部連携のコンテンツ')),
+    );
+  }
 }
 
 class AnalysisAlgorithmPage extends StatelessWidget {
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-            title: const Text('分析アルゴリズム'),
-            backgroundColor: kDarkGreen,
-            foregroundColor: Colors.white),
-        body: const Center(child: Text('アルゴリズム設定のコンテンツ')),
-      );
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Scaffold(
+      backgroundColor: colors.bg,
+      appBar: AppBar(
+          title: const Text('分析アルゴリズム'),
+          backgroundColor: colors.navBg,
+          foregroundColor: Colors.white),
+      body: const Center(child: Text('アルゴリズム設定のコンテンツ')),
+    );
+  }
 }

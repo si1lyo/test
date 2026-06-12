@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'app_theme.dart';
 import 'main_screen.dart';
 
 const _kDarkGreen = Color(0xFF428475);
 const _kLightGreen = Color(0xFF89D7B7);
-const _kBg = Color(0xFFFFFDFB);
 const _kFont = 'NotoSansJP';
 
 class AuthPage extends StatefulWidget {
@@ -131,7 +131,7 @@ class _AuthPageState extends State<AuthPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _kBg,
+      backgroundColor: AppColors.of(context).bg,
       resizeToAvoidBottomInset: false,
       body: _isLogin
           ? _LoginView(
@@ -643,18 +643,23 @@ class _Field extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fillColor = isDark
+        ? const Color(0xFF2E3330)
+        : Colors.white.withAlpha(220);
+    final textColor = isDark ? Colors.white : const Color(0xFF1D1B20);
     return TextField(
       controller: ctrl,
       keyboardType: type,
       obscureText: obscure,
-      style: const TextStyle(fontSize: 15, color: Color(0xFF1D1B20)),
+      style: TextStyle(fontSize: 15, color: textColor),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: Color(0xFF888888), fontSize: 14),
         prefixIcon: Icon(icon, color: _kDarkGreen, size: 20),
         suffixIcon: suffix,
         filled: true,
-        fillColor: Colors.white.withAlpha(220),
+        fillColor: fillColor,
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFD0E9E1)),
